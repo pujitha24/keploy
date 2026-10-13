@@ -1342,7 +1342,9 @@ func (r *Replayer) Instrument(ctx context.Context) (*InstrumentState, error) {
 	if err != nil {
 		stopReason := "failed setting up the environment"
 		utils.LogError(r.logger, err, stopReason)
-		return &InstrumentState{}, fmt.Errorf("%s", stopReason)
+		// Keep the cause: callers tell an interrupted setup (context.Canceled)
+		// from a failed one with errors.Is.
+		return &InstrumentState{}, fmt.Errorf("%s: %w", stopReason, err)
 	}
 	return &InstrumentState{}, nil
 }
