@@ -1549,8 +1549,8 @@ func (h *HTTP) ExactBodyMatch(body []byte, schemaMatched []*models.Mock) (bool, 
 
 func (h *HTTP) bodyMatch(mockBody, reqBody []byte) (bool, error) {
 
-	var mockData map[string]any
-	var reqData map[string]any
+	var mockData any
+	var reqData any
 	err := json.Unmarshal(mockBody, &mockData)
 	if err != nil {
 		utils.LogError(h.Logger, err, "failed to unmarshal the mock request body", zap.String("Req", string(mockBody)))
@@ -1562,8 +1562,21 @@ func (h *HTTP) bodyMatch(mockBody, reqBody []byte) (bool, error) {
 		return false, err
 	}
 
-	for key := range mockData {
-		_, exists := reqData[key]
+	mockObj, mockIsObj := mockData.(map[string]any)
+	reqObj, reqIsObj := reqData.(map[string]any)
+	if mockIsObj != reqIsObj {
+		return false, nil
+	}
+	if !mockIsObj {
+		// Arrays and scalars have no keys to compare; the later fuzzy
+		// pass decides on their content.
+		_, mockIsArr := mockData.([]any)
+		_, reqIsArr := reqData.([]any)
+		return mockIsArr == reqIsArr, nil
+	}
+
+	for key := range mockObj {
+		_, exists := reqObj[key]
 		if !exists {
 			return false, nil
 		}
@@ -1589,7 +1602,7 @@ func (h *HTTP) PerformBodyMatch(ctx context.Context, schemaMatched []*models.Moc
 		ok, err := h.bodyMatch([]byte(mock.Spec.HTTPReq.Body), reqBody)
 		if err != nil {
 			h.Logger.Error("failed to do schema matching on request body", zap.Error(err))
-			break
+			continue
 		}
 
 		if ok {
